@@ -920,8 +920,8 @@ def cmd_init(args) -> int:
         vs.append(sv)
     save_global(g)
     journal(vault, "init", roles=new_cfg["roles"], required=new_cfg["required"])
-    print(f"\n已写入：{CONFIG_NAME}；CLAUDE.md（{r1}）；AGENTS.md（{r2}）；{new_cfg['catalog']}；.gitignore（+{len(added)}）；注册到 {global_cfg_path()}")
-    print("下一步：vk lint 看问题；vk hooks --install 让 Claude Code 自动提交；有第二台机器就 vk sync --apply。")
+    print(f"{'' if quiet else chr(10)}已写入：{CONFIG_NAME}；CLAUDE.md（{r1}）；AGENTS.md（{r2}）；{new_cfg['catalog']}；.gitignore（+{len(added)}）" + ("" if quiet else f"；注册到 {global_cfg_path()}"))
+    say("下一步：vk lint 看问题；vk hooks --install 让 Claude Code 自动提交；有第二台机器就 vk sync --apply。")
     return 0
 
 

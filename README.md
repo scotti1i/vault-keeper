@@ -5,9 +5,9 @@
 > 知识库的管家：规则放在 agent 一定会读的地方，格式和同步交给脚本，每次用每次整理。给 Obsidian 和任何 Markdown 库，Claude Code、Codex 等所有 agent。
 
 ```bash
-npx skills add scotti1i/vault-keeper
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/scotti1i/vault-keeper/main/install.sh)"
 ```
-然后对 agent 说一句「**把这个沉淀到知识库**」或「**整理一下 vault**」。
+一条命令：装 skill → 从 Obsidian 登记表找到你所有的库 → 每个库写规则和目录 → 没 git 的建 git 打快照 → 提交推送 → 装 Claude Code 钩子和每 10 分钟的后台同步 → 体检。装完对 agent 说一句「**把这个沉淀到知识库**」或「**整理一下 vault**」。
 
 ## 它解决什么
 
@@ -26,23 +26,32 @@ npx skills add scotti1i/vault-keeper
 ## 安装
 
 ```bash
-# 方式一：Vercel 的 skills CLI（推荐）
+# 一键（推荐）：装 + 收编 + 钩子 + 定时，幂等，可重跑
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/scotti1i/vault-keeper/main/install.sh)"
+
+# 一键但指定库 / 顺手建私有 GitHub 仓库做同步（需要先 gh auth login）
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/scotti1i/vault-keeper/main/install.sh)" -- --vault ~/Notes --create-remote
+
+# 只装 skill，不动任何库（之后自己跑 vk setup 或 vk init）
 npx skills add scotti1i/vault-keeper
-
-# 方式二：手动
-git clone https://github.com/scotti1i/vault-keeper ~/.agents/skills/vault-keeper
 ```
-依赖：Python 3.9+、git。无第三方包。Obsidian 本身不是必需的。
+依赖：Python 3.9+、git。无第三方包。Obsidian 本身不是必需的；没装 Obsidian 就用 `--vault` 指目录。
 
-## 第一次运行会发生什么
+### 一键装完发生了什么
 
-```bash
-vk init --vault ~/Vault            # 看提案：目录角色、必填字段、将写入什么
-vk init --vault ~/Vault --apply    # 写 .vault-keeper.json、CLAUDE.md、AGENTS.md、CATALOG.md
-vk lint                            # 看问题
-vk hooks --install                 # Claude Code：启动提示 + 自动提交
-```
-`vk` = `python3 ~/.agents/skills/vault-keeper/scripts/vk.py`。
+| 步骤 | 做了什么 | 怎么撤 |
+|---|---|---|
+| 找库 | 读 Obsidian 的 `obsidian.json`，拿到你打开过的所有库 | `--vault` 覆盖 |
+| 收编 | 每个库：推断目录角色和必填字段 → `.vault-keeper.json`；写 `CLAUDE.md` + `AGENTS.md` 规则块；生成 `CATALOG.md`；空库放默认模板 | 删这几个文件 |
+| git | 没有 git 的 `git init` + 初始快照；有的提交当前改动；有远端就推 | 本地 git，随时可删 `.git` |
+| 远端 | 默认不建；`--create-remote` 或交互确认时用 `gh` 建私有仓库并推送 | GitHub 上删仓库 |
+| 钩子 | Claude Code：启动一行提示 + 会话结束自动提交（备份 settings.json） | `vk uninstall` |
+| 定时 | macOS launchd 每 10 分钟 `sync --auto --all`，给 Codex 和你直接在 Obsidian 里改的东西兜底 | `vk uninstall` |
+| 体检 | 每个库一行：多少篇、要处理什么 | — |
+
+之后你只需要在对话里说「沉淀」「整理」，格式和同步不用再想。
+
+`vk` = `python3 ~/.agents/skills/vault-keeper/scripts/vk.py`。手动一步步来也行：`vk init --vault ~/Vault`（看提案）→ `--apply` → `vk lint` → `vk hooks --install`。
 
 对现有库，`init` 不建骨架、不搬文件：扫顶层目录按名字和内容推断角色（raw / wiki / private / templates / archive / excluded），按该目录 ≥90% 笔记都有的字段推断必填项，找到已有的 SCHEMA.md 就引用它。推断结果写在库里的 `.vault-keeper.json`，可以改。
 
@@ -51,6 +60,8 @@ vk hooks --install                 # Claude Code：启动提示 + 自动提交
 ## 命令
 
 ```
+vk setup [--vault D…] [-y] [--create-remote]   一键：找库 → init → git → 同步 → 钩子 → 定时 → 体检
+vk uninstall                             撤掉钩子和定时任务，库里文件不动
 vk init [--vault D] [--apply] [--git]    收编：推断角色、写规则块、生成目录
 vk lint [--full] [--json]                校验（只读）
 vk index                                 生成 CATALOG.md

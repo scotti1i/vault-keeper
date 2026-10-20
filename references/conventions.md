@@ -76,18 +76,23 @@ raw（不可变）  →  wiki（agent 写、人审）  ←  schema（人定：CL
 - 锁：`sync.lock`，5 分钟过期；两个会话同时 Stop 不会打架。
 - 永不 `--force`、`reset`、`checkout -- file`。
 
+## `vk setup`：一键的边界
+
+做：找库（Obsidian `obsidian.json`，或 `--vault`）→ `init --apply --git`（新文件、幂等）→ 无 commit 的打初始快照 → 有远端就 `sync --apply` → Claude Code 钩子 → macOS launchd 定时 → 体检一行。
+不做：不建远端（除非 `--create-remote` 或交互里说 y，且 `gh` 已登录）；不装 Obsidian；不修任何需要判断的问题（F1/L1 等留给 agent 对话）；不推送没有远端的库。
+`vk uninstall` 撤钩子和定时，库里的文件和 git 历史保留。
+
 ## 两台电脑的最短路径
 
 ```
 # 机器 A（已有库）
-vk init --vault ~/Vault --apply
-vk sync --vault ~/Vault --apply          # 没远端先：gh repo create vault --private --source ~/Vault --push
-vk hooks --install                       # Claude Code：启动提示 + Stop 自动提交
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/scotti1i/vault-keeper/main/install.sh)" -- --create-remote
+#   等价于：vk init --apply + 初始快照 + gh repo create vault-<名> --private --push + hooks + schedule
 
 # 机器 B
 git clone <远端> ~/Vault
-vk init --vault ~/Vault --apply          # 读到同一份 .vault-keeper.json，只补 CLAUDE.md 和注册
-vk hooks --install
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/scotti1i/vault-keeper/main/install.sh)"
+#   读到同一份 .vault-keeper.json，只补 CLAUDE.md、注册、钩子
 ```
 手机 / 平板只读：GitHub app 或 Obsidian Sync（和 git 并存没问题，但不要 iCloud + Sync 双开）。
 

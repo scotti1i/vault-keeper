@@ -38,7 +38,9 @@ It handles four things: notes the agent wrote but nobody committed, links the ag
 | 之前有没有记过… / 哪篇笔记讲… / find | `vk find "<原话>"`，把前几条和一句话摘要给用户 |
 | 同步 / 推送 / 另一台电脑看不到 | `vk sync`，看 dry-run 再 `--apply`；CONFLICT 原样转告 |
 | 新建一篇… | `vk new <目录> "<标题>"`，然后按沉淀流程写正文 |
+| 一键 / 全部装好 / setup | `vk setup`：自动找库、收编、git、钩子、定时；库找不到就问路径 |
 | 第一次 / 初始化 / 收编这个库 | `vk init --vault <目录>` 看提案，用户同意后 `--apply` |
+| 卸载 / 不要自动提交了 | `vk uninstall`（只撤钩子和定时，库不动） |
 | 自动 / 钩子 / 每次都提交 | `vk hooks`（Claude Code）；Codex 用 `vk schedule` |
 | 解释代码 L1 | `vk explain L1` |
 

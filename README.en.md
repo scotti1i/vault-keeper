@@ -5,9 +5,9 @@
 > A steward for your knowledge base: rules where every agent reads them, format and sync done by scripts, a little tidying every time you use it. For Obsidian and any Markdown vault; for Claude Code, Codex and every other agent.
 
 ```bash
-npx skills add scotti1i/vault-keeper
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/scotti1i/vault-keeper/main/install.sh)"
 ```
-Then tell your agent **"save this to my vault"** or **"tidy up my vault"**.
+One command: install the skill → find every vault in Obsidian's registry → write rules and a catalog into each → `git init` and snapshot the ones without git → commit and push → install the Claude Code hooks and a 10-minute background sync → health check. Then tell your agent **"save this to my vault"** or **"tidy up my vault"**.
 
 ## What it solves
 
@@ -26,23 +26,32 @@ Nothing is deleted. Git is never forced. Every change is in history.
 ## Install
 
 ```bash
-# Option 1: Vercel's skills CLI (recommended)
+# One click (recommended): install + adopt + hooks + timer; idempotent, safe to re-run
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/scotti1i/vault-keeper/main/install.sh)"
+
+# Same, but name the vault and create a private GitHub repo for sync (needs gh auth login first)
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/scotti1i/vault-keeper/main/install.sh)" -- --vault ~/Notes --create-remote
+
+# Skill only, touch no vault (run vk setup or vk init yourself later)
 npx skills add scotti1i/vault-keeper
-
-# Option 2: manual
-git clone https://github.com/scotti1i/vault-keeper ~/.agents/skills/vault-keeper
 ```
-Requirements: Python 3.9+, git. No third-party packages. Obsidian itself is optional.
+Requirements: Python 3.9+, git. No third-party packages. Obsidian itself is optional; without it, point at a folder with `--vault`.
 
-## First run
+### What the one-click install does
 
-```bash
-vk init --vault ~/Vault            # proposal: folder roles, required fields, what will be written
-vk init --vault ~/Vault --apply    # writes .vault-keeper.json, CLAUDE.md, AGENTS.md, CATALOG.md
-vk lint                            # see what's wrong
-vk hooks --install                 # Claude Code: startup line + auto-commit on Stop
-```
-`vk` = `python3 ~/.agents/skills/vault-keeper/scripts/vk.py`.
+| Step | What happens | Undo |
+|---|---|---|
+| Find vaults | Reads Obsidian's `obsidian.json` for every vault you have opened | override with `--vault` |
+| Adopt | Per vault: infer folder roles and required fields → `.vault-keeper.json`; write the `CLAUDE.md` + `AGENTS.md` rules block; generate `CATALOG.md`; default templates for empty vaults | delete those files |
+| Git | `git init` + first snapshot where there is none; commit pending changes where there is; push if a remote exists | local git, delete `.git` any time |
+| Remote | Not created by default; `--create-remote` or an interactive yes creates a private repo with `gh` and pushes | delete the repo on GitHub |
+| Hooks | Claude Code: one startup line + auto-commit on Stop (settings.json is backed up) | `vk uninstall` |
+| Timer | macOS launchd runs `sync --auto --all` every 10 minutes, covering Codex and edits made directly in Obsidian | `vk uninstall` |
+| Health | One line per vault: how many notes, what needs attention | — |
+
+From then on you just say "save this" or "tidy up" in conversation; format and sync are no longer your problem.
+
+`vk` = `python3 ~/.agents/skills/vault-keeper/scripts/vk.py`. The step-by-step path still works: `vk init --vault ~/Vault` (proposal) → `--apply` → `vk lint` → `vk hooks --install`.
 
 On an existing vault, `init` builds no skeleton and moves no files. It scans top-level folders and infers roles from names and contents (raw / wiki / private / templates / archive / excluded), infers required fields as those present in at least 90% of a folder's notes, and references an existing SCHEMA.md if it finds one. The result lives in `.vault-keeper.json` inside the vault, so both machines agree, and you can edit it.
 
@@ -51,6 +60,8 @@ An empty vault gets a default set of templates (insight / decision / raw / proje
 ## Commands
 
 ```
+vk setup [--vault D…] [-y] [--create-remote]   one click: find vaults → init → git → sync → hooks → timer → health
+vk uninstall                             remove hooks and timer; vault files stay
 vk init [--vault D] [--apply] [--git]    adopt a vault: infer roles, write the rules block, build the catalog
 vk lint [--full] [--json]                checks (read-only)
 vk index                                 generate CATALOG.md
