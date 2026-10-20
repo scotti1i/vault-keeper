@@ -848,29 +848,31 @@ def cmd_init(args) -> int:
         if k in cfg:
             new_cfg[k] = cfg[k]
 
-    print(f"# vault-keeper init · {vault}")
-    print(f"笔记 {len(notes)} 篇；git：{'有' if gs['git'] else '无'}" + (f"，远端 {'有' if gs.get('remote') else '无'}" if gs["git"] else ""))
-    print("\n## 目录角色（推断，可改 .vault-keeper.json）")
-    print("| 目录 | 角色 | md | 其他 |\n|---|---|---|---|")
+    quiet = getattr(args, "quiet", False)
+    say = (lambda *a, **k: None) if quiet else print
+    say(f"# vault-keeper init · {vault}")
+    say(f"笔记 {len(notes)} 篇；git：{'有' if gs['git'] else '无'}" + (f"，远端 {'有' if gs.get('remote') else '无'}" if gs["git"] else ""))
+    say("\n## 目录角色（推断，可改 .vault-keeper.json）")
+    say("| 目录 | 角色 | md | 其他 |\n|---|---|---|---|")
     for name, s in sorted(stats.items(), key=lambda kv: (ROLES.index(kv[1]["role"]), kv[0])):
-        print(f"| {name}/ | {s['role']} | {s['md']} | {s['other']} |")
+        say(f"| {name}/ | {s['role']} | {s['md']} | {s['other']} |")
     if new_cfg["required"]:
-        print("\n## 必填字段（该目录 ≥90% 笔记都有）")
+        say("\n## 必填字段（该目录 ≥90% 笔记都有）")
         for d, f in sorted(new_cfg["required"].items()):
-            print(f"- {d}/: {', '.join(f)}")
-    print(f"\n规则文件：{rules or '无（将只用生成的块）'}")
+            say(f"- {d}/: {', '.join(f)}")
+    say(f"\n规则文件：{rules or '无（将只用生成的块）'}")
     if secret_dirs:
-        print(f"疑似密钥目录：{', '.join(secret_dirs)} → 标为 excluded，并加入 .gitignore")
-    if tracked_secret:
+        say(f"疑似密钥目录：{', '.join(secret_dirs)} → 标为 excluded，并加入 .gitignore")
+    if tracked_secret:  # 这条无论 quiet 都要说
         print(f"注意：{', '.join(d + '/' for d in tracked_secret)} 看起来像密钥目录但已被 git 跟踪，.gitignore 管不了它。"
               "确认里面没有明文就在 .vault-keeper.json 加 \"secret_dirs_ok\": [\"…\"]；有明文就 git rm --cached 后再 ignore。")
-    print("\n## 将写入")
-    print(f"- {CONFIG_NAME}（配置）")
-    print(f"- CLAUDE.md、AGENTS.md（管理块，已有文件则只插入/更新块）")
-    print(f"- {new_cfg['catalog']}（生成的目录）")
-    print("- .gitignore 补：.obsidian/workspace*  .trash/  .DS_Store" + ("  " + "  ".join(d + "/" for d in secret_dirs) if secret_dirs else ""))
+    say("\n## 将写入")
+    say(f"- {CONFIG_NAME}（配置）")
+    say(f"- CLAUDE.md、AGENTS.md（管理块，已有文件则只插入/更新块）")
+    say(f"- {new_cfg['catalog']}（生成的目录）")
+    say("- .gitignore 补：.obsidian/workspace*  .trash/  .DS_Store" + ("  " + "  ".join(d + "/" for d in secret_dirs) if secret_dirs else ""))
     if not gs["git"]:
-        print("- git：未初始化。" + ("加 --git 会 `git init`。" if not args.git else "将 `git init`。"))
+        say("- git：未初始化。" + ("加 --git 会 `git init`。" if not args.git else "将 `git init`。"))
     if not args.apply:
         print("\n（dry-run。加 --apply 执行。不会提交 git、不会装钩子。）")
         return 0
@@ -1294,6 +1296,162 @@ def cmd_schedule(args) -> int:
     return 0
 
 
+def detect_obsidian_vaults() -> List[Path]:
+    """读 Obsidian 自己的登记表，拿到本机所有打开过的库。"""
+    cands = [
+        home() / "Library" / "Application Support" / "obsidian" / "obsidian.json",   # macOS
+        home() / ".config" / "obsidian" / "obsidian.json",                            # Linux
+        Path(os.environ.get("APPDATA", "")) / "obsidian" / "obsidian.json" if os.environ.get("APPDATA") else None,
+    ]
+    out: List[Path] = []
+    for c in cands:
+        if c and c.exists():
+            try:
+                data = json.loads(c.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                continue
+            for v in (data.get("vaults") or {}).values():
+                p = Path(v.get("path", ""))
+                if p.is_dir() and (p / ".obsidian").exists() and p not in out:
+                    out.append(p)
+    return out
+
+
+def ensure_skill_projection() -> str:
+    """装在 ~/.agents/skills 里时，给 Claude Code 补一个软链接（Codex 直接读库，不需要）。"""
+    me = Path(__file__).resolve().parent.parent
+    claude = home() / ".claude"
+    if not claude.exists():
+        return "Claude Code 未检测到"
+    link = claude / "skills" / me.name
+    if link.exists() or link.is_symlink():
+        return "Claude Code 已可见"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        link.symlink_to(me)
+        return f"已链接到 {link}"
+    except OSError as e:
+        return f"软链接失败（{e}）；用 npx skills add 安装可绕过"
+
+
+def _ask(prompt: str, default_no: bool = True, yes: bool = False) -> bool:
+    if yes:
+        return not default_no
+    if not sys.stdin.isatty():
+        return not default_no
+    try:
+        a = input(prompt + (" [y/N] " if default_no else " [Y/n] ")).strip().lower()
+    except EOFError:
+        return not default_no
+    if not a:
+        return not default_no
+    return a in ("y", "yes", "是", "好")
+
+
+def cmd_setup(args) -> int:
+    """一键：找库 → init → git → 同步 → 钩子 → 定时 → 体检。幂等，可重跑。"""
+    print(f"# vault-keeper setup v{VERSION}")
+    vaults: List[Path] = [expand(v).resolve() for v in (args.vault or [])]
+    if not vaults:
+        vaults = detect_obsidian_vaults()
+        if vaults:
+            print(f"从 Obsidian 登记表找到 {len(vaults)} 个库：" + "，".join(str(v) for v in vaults))
+    if not vaults:
+        vaults = registered_vaults()
+    if not vaults:
+        print("没找到 Obsidian 库。指定路径：vk setup --vault <目录>（可多个）。纯 Markdown 目录也可以。")
+        return 1
+    print(ensure_skill_projection())
+    gh_ok = shutil.which("gh") is not None and subprocess.run(["gh", "auth", "status"], capture_output=True).returncode == 0
+    summary = []
+    for v in vaults:
+        print(f"\n## {v}")
+        cfg = load_vault_cfg(v)
+        fresh = not cfg
+        # 1. init（新文件、幂等）
+        ns = argparse.Namespace(vault=str(v), apply=True, git=True, quiet=True)
+        buf_rc = cmd_init(ns)
+        if buf_rc != 0:
+            summary.append((v, "init 失败"))
+            continue
+        cfg = load_vault_cfg(v)
+        # 2. git：首个快照 + 远端
+        gs = git_state(v)
+        if gs["git"] and not git(v, "rev-parse", "HEAD").returncode == 0:
+            git(v, "add", "-A")
+            git(v, "commit", "-q", "-m", f"vault-keeper: {today()} 初始快照")
+            print("已打初始快照（本地 git）。")
+        gs = git_state(v)
+        if gs["git"] and not gs["remote"]:
+            name = f"vault-{v.name.lower()}" if v.name.lower() != "vault" else "vault"
+            if gh_ok and (args.create_remote or _ask(f"没有远端。用 gh 建私有仓库 {name} 并推送？", yes=args.yes)):
+                r = subprocess.run(["gh", "repo", "create", name, "--private", "--source", str(v), "--push"],
+                                   capture_output=True, text=True)
+                print(("已创建并推送：" + (r.stdout.strip() or name)) if r.returncode == 0 else ("建仓失败：" + r.stderr.strip()[:200]))
+            else:
+                print(f"没有远端：另一台电脑要同步时运行  gh repo create {name} --private --source {v} --push"
+                      + ("" if gh_ok else "  （先 gh auth login）"))
+        # 3. 同步一次
+        if gs["git"]:
+            do_sync(v, cfg, apply=True, push=None, msg=None, auto=False, quiet=False)
+        # 4. 体检
+        notes = load_notes(v, cfg)
+        r = lint(v, cfg, notes)
+        (state_dir(v) / "last-lint.json").write_text(json.dumps(r, ensure_ascii=False, indent=1), encoding="utf-8")
+        warns = {c: n for c, n in r["counts"].items() if LINT_LEVEL[c] == "warn" and not c.startswith("G")}
+        line = f"{len(notes)} 篇；要处理：" + ("，".join(f"{c}×{n}" for c, n in sorted(warns.items())) or "无")
+        print("体检：" + line)
+        summary.append((v, line + ("（新收编）" if fresh else "")))
+    # 5. 钩子与定时
+    print()
+    if not args.no_hooks and (home() / ".claude").exists():
+        cmd_hooks(argparse.Namespace(install=True))
+    elif not args.no_hooks:
+        print("Claude Code 未检测到，跳过钩子。")
+    if not args.no_schedule and sys.platform == "darwin":
+        cmd_schedule(argparse.Namespace(install=True, every=args.every))
+    elif not args.no_schedule:
+        cmd_schedule(argparse.Namespace(install=False, every=args.every))
+    print("\n# 完成")
+    for v, line in summary:
+        print(f"- {v.name}: {line}")
+    print("\n下一步：在库目录里打开 Claude Code 或 Codex，说一句「整理一下 vault」，agent 会把要你决定的事一次问完。")
+    print("之后：每次会话结束自动提交，每 10 分钟后台推送，启动时一行提示。想撤掉：vk uninstall。")
+    return 0
+
+
+def cmd_uninstall(args) -> int:
+    """撤掉钩子和定时任务；库里的文件和 git 不动。"""
+    me = str(Path(__file__).resolve())
+    sp = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (home() / ".claude")) / "settings.json"
+    if sp.exists():
+        data = json.loads(sp.read_text(encoding="utf-8"))
+        h = data.get("hooks") or {}
+        removed = 0
+        for ev in list(h.keys()):
+            kept = []
+            for entry in h[ev]:
+                hooks = [x for x in entry.get("hooks", []) if me not in x.get("command", "")]
+                removed += len(entry.get("hooks", [])) - len(hooks)
+                if hooks:
+                    entry["hooks"] = hooks
+                    kept.append(entry)
+            if kept:
+                h[ev] = kept
+            else:
+                h.pop(ev, None)
+        sp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"Claude Code 钩子：移除 {removed} 条")
+    if sys.platform == "darwin":
+        plist = home() / "Library" / "LaunchAgents" / "com.vault-keeper.sync.plist"
+        if plist.exists():
+            subprocess.run(["launchctl", "unload", str(plist)], capture_output=True)
+            plist.unlink()
+            print("launchd 定时任务：已卸载")
+    print("库里的 CLAUDE.md / CATALOG.md / .vault-keeper.json 和 git 历史保留；不想要可以手动删。")
+    return 0
+
+
 def cmd_explain(args) -> int:
     for c in args.codes:
         c = c.upper()
@@ -1388,6 +1546,18 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     p = V(sub.add_parser("stats", help="规模与 git 状态一览"))
     p.set_defaults(fn=cmd_stats)
+
+    p = sub.add_parser("setup", help="一键：找到本机 Obsidian 库 → init → git → 同步 → 钩子 → 定时 → 体检（幂等）")
+    p.add_argument("--vault", action="append", help="指定库目录，可多次；不给则读 Obsidian 登记表")
+    p.add_argument("--yes", "-y", action="store_true", help="不提问，取默认（不建远端）")
+    p.add_argument("--create-remote", action="store_true", help="没有远端时用 gh 建私有仓库并推送")
+    p.add_argument("--no-hooks", action="store_true")
+    p.add_argument("--no-schedule", action="store_true")
+    p.add_argument("--every", type=int, default=10)
+    p.set_defaults(fn=cmd_setup)
+
+    p = sub.add_parser("uninstall", help="撤掉钩子和定时任务，库里文件不动")
+    p.set_defaults(fn=cmd_uninstall)
 
     p = sub.add_parser("explain", help="解释 lint 代码")
     p.add_argument("codes", nargs="+")
