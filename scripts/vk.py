@@ -586,11 +586,15 @@ def lint(vault: Path, cfg: dict, notes: List[Note]) -> dict:
             missing = [k for k in required[n.top] if k not in n.fm]
             if missing:
                 add("F2", n.rel, f"缺字段 {', '.join(missing)}", fields=missing)
-        if n.rel == catalog_name:
-            continue
+        if n.rel == catalog_name or n.role == "templates":
+            continue  # 目录是生成的；模板里的 [[wikilink]] 是占位，不查链接
         if n.residue:
             add("F3", n.rel, "模板占位符未填")
+        seen_targets: set = set()
         for is_embed, target in n.links:
+            if target in seen_targets:
+                continue
+            seen_targets.add(target)
             hit, cnt = res.resolve(target, n.rel)
             if hit is None:
                 add("L1", n.rel, f"断链 [[{target}]]", target=target, suggest=res.suggest(target))
@@ -600,6 +604,9 @@ def lint(vault: Path, cfg: dict, notes: List[Note]) -> dict:
                 if cnt >= 2 and "/" not in target:
                     add("L2", n.rel, f"[[{target}]] 有 {cnt} 个同名候选", target=target)
         for target in n.mdlinks:
+            if target in seen_targets:
+                continue
+            seen_targets.add(target)
             hit, _ = res.resolve(target, n.rel)
             if hit is None:
                 add("L1", n.rel, f"断链 ({target})", target=target, suggest=res.suggest(target))
