@@ -4,6 +4,8 @@
 
 > 知识库的管家：规则放在 agent 一定会读的地方，格式和同步交给脚本，每次用每次整理。给 Obsidian 和任何 Markdown 库，Claude Code、Codex 等所有 agent。
 
+接入已有库前，可以用 [Obsidian AI 知识库指南](https://sctcamp.com/posts/obsidian-ai-knowledge-base)规划证据、决策和发布目录，再用三道验收题检查 AI 能否找到来源、识别旧结论和说明未知项。
+
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/scotti1i/vault-keeper/main/install.sh)"
 ```
