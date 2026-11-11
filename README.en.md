@@ -5,6 +5,7 @@
 > A steward for your knowledge base: rules where every agent reads them, format and sync done by scripts, a little tidying every time you use it. For Obsidian and any Markdown vault; for Claude Code, Codex and every other agent.
 
 Before adopting an existing vault, use the [Obsidian AI knowledge base guide](https://sctcamp.com/en/posts/obsidian-ai-knowledge-base) to separate sources, decisions, and publishing material and test whether an agent can trace evidence, identify superseded conclusions, and state what it cannot verify.
+Extract the [three fictional practice notes](https://sctcamp.com/samples/obsidian-ai-knowledge-base-demo.zip) into one Obsidian vault to check the guide’s worked answer.
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/scotti1i/vault-keeper/main/install.sh)"
